@@ -1,0 +1,7 @@
+1. The ability to store the trap number and error code.
+2. The user program is not allowed to call page faults directly, so it runs
+   into permission issues resulting in trap 13. If we did allow it to call a
+   page fault, then for now it wouldn't do much because we haven't implemented
+   the page fault handler yet, but in the future user programs would be able to
+   request all of the computer's memory even if it wasn't using it.
+

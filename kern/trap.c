@@ -58,6 +58,8 @@ static const char *trapname(int trapno)
 	return "(unknown trap)";
 }
 
+#define TENTRY(name) extern uintptr_t name; SETGATE(idt[T_##name], 1, GD_KT, &name, 0);
+#define TENTRYN(name) extern uintptr_t name; SETGATE(idt[T_##name], 0, GD_KT, &name, 0);
 
 void
 trap_init(void)
@@ -65,6 +67,26 @@ trap_init(void)
 	extern struct Segdesc gdt[];
 
 	// LAB 3: Your code here.
+	TENTRYN(DIVIDE);
+	TENTRYN(DEBUG);
+	TENTRYN(NMI);
+	TENTRYN(BRKPT);
+	TENTRYN(OFLOW);
+	TENTRYN(BOUND);
+	TENTRYN(ILLOP);
+	TENTRYN(DEVICE);
+	TENTRY(DBLFLT);
+	TENTRY(TSS);
+	TENTRY(SEGNP);
+	TENTRY(STACK);
+	TENTRY(GPFLT);
+	TENTRY(PGFLT);
+	TENTRYN(FPERR);
+	TENTRY(ALIGN);
+	TENTRYN(MCHK);
+	TENTRYN(SIMDERR);
+	TENTRYN(SYSCALL);
+	TENTRYN(DEFAULT);
 
 	// Per-CPU setup 
 	trap_init_percpu();

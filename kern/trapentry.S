@@ -46,10 +46,57 @@
 /*
  * Lab 3: Your code here for generating entry points for the different traps.
  */
+#define TRAPH(name) TRAPHANDLER(name, T_##name##)
+#define TRAPHN(name) TRAPHANDLER_NOEC(name, T_##name##)
 
+TRAPHN(DIVIDE)
+TRAPHN(DEBUG)
+TRAPHN(NMI)
+TRAPHN(BRKPT)
+TRAPHN(OFLOW)
+TRAPHN(BOUND)
+TRAPHN(ILLOP)
+TRAPHN(DEVICE)
+TRAPH(DBLFLT)
+TRAPH(TSS)
+TRAPH(SEGNP)
+TRAPH(STACK)
+TRAPH(GPFLT)
+TRAPH(PGFLT)
+TRAPHN(FPERR)
+TRAPH(ALIGN)
+TRAPHN(MCHK)
+TRAPHN(SIMDERR)
+TRAPHN(SYSCALL)
+TRAPHN(DEFAULT)
 
-
+.text
 /*
  * Lab 3: Your code here for _alltraps
  */
+_alltraps:
+	popl %eax // trapno
+	popl %ebx // err
+	movl 4(%ebp), %ecx // eip
+	addl $20,%esp
+	pushw $0
+	pushw $0x23 // %ss
+	pushl %esp
+	pushl $0
+	pushw $0
+	pushw $3 // %cs
+	pushl %ecx //%eip
+	pushl %ebx //err
+	pushl %eax //trapno
+	pushw $0
+	pushw %ds
+	pushw $0
+	pushw %es
+	pushal
+
+	mov $0x10, %ax
+	mov %ax, %ds
+	mov %ax, %es
+	pushl %esp
+	call trap
 
