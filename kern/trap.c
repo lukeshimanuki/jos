@@ -60,6 +60,7 @@ static const char *trapname(int trapno)
 
 #define TENTRY(name) extern uintptr_t name; SETGATE(idt[T_##name], 1, GD_KT, &name, 0);
 #define TENTRYN(name) extern uintptr_t name; SETGATE(idt[T_##name], 0, GD_KT, &name, 0);
+#define TENTRYUN(name) extern uintptr_t name; SETGATE(idt[T_##name], 0, GD_KT, &name, -1);
 
 void
 trap_init(void)
@@ -70,7 +71,7 @@ trap_init(void)
 	TENTRYN(DIVIDE);
 	TENTRYN(DEBUG);
 	TENTRYN(NMI);
-	TENTRYN(BRKPT);
+	TENTRYUN(BRKPT);
 	TENTRYN(OFLOW);
 	TENTRYN(BOUND);
 	TENTRYN(ILLOP);
@@ -85,7 +86,7 @@ trap_init(void)
 	TENTRY(ALIGN);
 	TENTRYN(MCHK);
 	TENTRYN(SIMDERR);
-	TENTRYN(SYSCALL);
+	TENTRYUN(SYSCALL);
 	TENTRYN(DEFAULT);
 
 	// Per-CPU setup 
@@ -166,6 +167,19 @@ trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
+	switch (tf->tf_trapno) {
+	case T_PGFLT:
+		page_fault_handler(tf);
+		return;
+	case T_BRKPT:
+		monitor(tf);
+		return;
+	case T_SYSCALL:
+		tf->tf_regs.reg_eax = syscall(tf->tf_regs.reg_eax, tf->tf_regs.reg_edx, tf->tf_regs.reg_ecx, tf->tf_regs.reg_ebx, tf->tf_regs.reg_edi, tf->tf_regs.reg_esi);
+		return;
+	default:
+		break;
+	}
 
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);
@@ -235,6 +249,9 @@ page_fault_handler(struct Trapframe *tf)
 	cprintf("[%08x] user fault va %08x ip %08x\n",
 		curenv->env_id, fault_va, tf->tf_eip);
 	print_trapframe(tf);
+
+	if (!(tf->tf_cs & 3)) panic("kernel page fault");
+
 	env_destroy(curenv);
 }
 

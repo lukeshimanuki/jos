@@ -278,9 +278,9 @@ region_alloc(struct Env *e, void *va, size_t len)
 	//   'va' and 'len' values that are not page-aligned.
 	//   You should round va down, and round (va + len) up.
 	//   (Watch out for corner-cases!)
-	for (void* addr = ROUNDDOWN(va, PGSIZE); addr < va + len; ++addr) {
+	for (void* addr = ROUNDDOWN(va, PGSIZE); addr < va + len; addr += PGSIZE) {
 		struct PageInfo* page = page_alloc(ALLOC_ZERO);
-		page_insert(e->env_pgdir, page, ROUNDDOWN(va, PGSIZE), PTE_P|PTE_W|PTE_U);
+		page_insert(e->env_pgdir, page, addr, PTE_P|PTE_W|PTE_U);
 	}
 }
 
@@ -498,12 +498,14 @@ env_run(struct Env *e)
 	//	e->env_tf to sensible values.
 
 	// LAB 3: Your code here.
-	if (curenv && curenv->env_status == ENV_RUNNING) curenv->env_status = ENV_RUNNABLE;
-	curenv = e;
-	e->env_status = ENV_RUNNING;
-	++e->env_runs;
-	cprintf("%x\n", e->env_pgdir);
-	lcr3(PADDR(e->env_pgdir));
+	if (curenv != e) {
+		if (curenv && curenv->env_status == ENV_RUNNING) curenv->env_status = ENV_RUNNABLE;
+		curenv = e;
+		e->env_status = ENV_RUNNING;
+		++e->env_runs;
+		//cprintf("%x\n", e->env_pgdir);
+		lcr3(PADDR(e->env_pgdir));
+	}
 
 	env_pop_tf(&e->env_tf);
 

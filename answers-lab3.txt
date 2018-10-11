@@ -5,3 +5,10 @@
    the page fault handler yet, but in the future user programs would be able to
    request all of the computer's memory even if it wasn't using it.
 
+3. It has to be set up with descriptor privilege level -1.
+   Otherwise, the user program won't have permissions to invoke it,
+   resulting in a general protection fault.
+4. These mechanisms control what interrupts and behaviors can be invoked by
+   user programs. In particular, we don't want user programs to be able to
+   cause arbitrary crashes.
+

@@ -75,19 +75,6 @@ TRAPHN(DEFAULT)
  * Lab 3: Your code here for _alltraps
  */
 _alltraps:
-	popl %eax // trapno
-	popl %ebx // err
-	movl 4(%ebp), %ecx // eip
-	addl $20,%esp
-	pushw $0
-	pushw $0x23 // %ss
-	pushl %esp
-	pushl $0
-	pushw $0
-	pushw $3 // %cs
-	pushl %ecx //%eip
-	pushl %ebx //err
-	pushl %eax //trapno
 	pushw $0
 	pushw %ds
 	pushw $0
@@ -97,6 +84,7 @@ _alltraps:
 	mov $0x10, %ax
 	mov %ax, %ds
 	mov %ax, %es
+	mov %esp, %esi
 	pushl %esp
 	call trap
 
