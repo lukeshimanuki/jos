@@ -12,3 +12,10 @@
    user programs. In particular, we don't want user programs to be able to
    cause arbitrary crashes.
 
+Challenge: I reduced duplicate code by automatically generating the idt table
+           directly in trapentry.S. In the macro to generate the handler I
+		   also included a data section that defines a 8-byte structure
+		   constructed in the same manner as with SETGATE. One caveat is I
+		   had to put the calls to the macro in order, and I had to manually
+		   add space for interrupts I did not define.
+
