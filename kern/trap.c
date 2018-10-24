@@ -310,6 +310,8 @@ page_fault_handler(struct Trapframe *tf)
 
 	// LAB 3: Your code here.
 
+	if (!(tf->tf_cs & 3)) panic("kernel page fault");
+
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
 
@@ -344,13 +346,41 @@ page_fault_handler(struct Trapframe *tf)
 
 	// LAB 4: Your code here.
 
-	// Destroy the environment that caused the fault.
-	cprintf("[%08x] user fault va %08x ip %08x\n",
-		curenv->env_id, fault_va, tf->tf_eip);
-	print_trapframe(tf);
+	if (curenv->env_pgfault_upcall == NULL) {
+		cprintf("[%08x] user fault va %08x ip %08x\n",
+			curenv->env_id, fault_va, tf->tf_eip);
+		print_trapframe(tf);
+		// Destroy the environment that caused the fault.
+		env_destroy(curenv);
+		return;
+	} else if (
+		user_mem_check(curenv, (void*)UXSTACKTOP - PGSIZE, PGSIZE, PTE_U|PTE_P|PTE_W) < 0
+		|| (tf->tf_esp < UXSTACKTOP - PGSIZE + sizeof(struct UTrapframe) && tf->tf_esp > USTACKTOP)
+	) {
+		cprintf("[%08x] user fault va %08x ip %08x bad stack\n",
+			curenv->env_id, fault_va, tf->tf_eip);
+		print_trapframe(tf);
+		user_mem_assert(curenv, (void*)UXSTACKTOP - PGSIZE + 0xf00, 0x100, PTE_U|PTE_P|PTE_W);
+		// Destroy the environment that caused the fault.
+		env_destroy(curenv);
+		return;
+	}
 
-	if (!(tf->tf_cs & 3)) panic("kernel page fault");
+	user_mem_assert(curenv, (void*)curenv->env_pgfault_upcall, 1, PTE_U|PTE_P);
 
-	env_destroy(curenv);
+	const uintptr_t stacktop = tf->tf_esp > UXSTACKTOP - PGSIZE && tf->tf_esp <= UXSTACKTOP ? tf->tf_esp - 4 : UXSTACKTOP;
+
+	struct UTrapframe* utf = (struct UTrapframe*)(stacktop - sizeof(struct UTrapframe));
+	utf->utf_esp = tf->tf_esp;
+	utf->utf_eflags = tf->tf_eflags;
+	utf->utf_eip = tf->tf_eip;
+	utf->utf_regs = tf->tf_regs;
+	utf->utf_err = tf->tf_err;
+	utf->utf_fault_va = fault_va;
+
+	curenv->env_tf.tf_esp = (uintptr_t)utf;
+	curenv->env_tf.tf_eip = (uintptr_t)curenv->env_pgfault_upcall;
+
+	env_run(curenv);
 }
 
