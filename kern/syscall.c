@@ -323,18 +323,20 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 
 	// add to linked-list and block
 	if (!e->env_ipc_recving) {
-		return -E_IPC_NOT_RECV;
 		cenv->env_ipc_value = value;
 		cenv->env_ipc_dstva = srcva;
 		cenv->env_ipc_perm = perm;
-		struct Env* tail = e;
-		while (tail->env_ipc_next != 0)
-			if (envid2env(e->env_ipc_next, &e, 0) < 0) panic("sys_ipc_try_send: envid2env");
-		tail->env_ipc_next = cenv->env_id;
+		if (e->env_ipc_receiving_from) {
+			struct Env* tail;
+			if (envid2env(e->env_ipc_receiving_from, &tail, 0)) panic("sys_ipc_try_send: envid2env");
+			while (tail->env_ipc_next != 0)
+				if (envid2env(tail->env_ipc_next, &tail, 0) < 0) panic("sys_ipc_try_send: envid2env");
+			tail->env_ipc_next = cenv->env_id;
+		} else e->env_ipc_receiving_from = cenv->env_id;
 
 		cenv->env_status = ENV_NOT_RUNNABLE;
 		sched_yield();
-		return 0;
+		return 0; // to appease the compiler
 	}
 
 	e->env_ipc_recving = 0;
@@ -354,7 +356,7 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 		e->env_ipc_perm = perm;
 	} else e->env_ipc_perm = 0;
 
-	e->env_ipc_next = 0;
+	e->env_ipc_receiving_from = 0;
 
 	e->env_ipc_from = cenv->env_id;
 	e->env_ipc_value = value;
@@ -385,18 +387,38 @@ sys_ipc_recv(void *dstva)
 
 	struct Env* e = curenv;
 	e->env_tf.tf_regs.reg_eax = 0;
-	if (e->env_ipc_next) {
+	if (e->env_ipc_receiving_from) {
 		struct Env* nenv;
-		if (envid2env(e->env_ipc_next, &nenv, 0) < 0) panic("sys_ipc_recv: envid2env");
+		if (envid2env(e->env_ipc_receiving_from, &nenv, 0) < 0) panic("sys_ipc_recv: envid2env");
 
-		e->env_ipc_value = nenv->env_ipc_value;
-		e->env_ipc_dstva = nenv->env_ipc_dstva;
-		e->env_ipc_perm = nenv->env_ipc_perm;
+		void* srcva = nenv->env_ipc_dstva;
+		int32_t value = nenv->env_ipc_value;
+		int perm = nenv->env_ipc_perm;
+		envid_t envid = e->env_id;
 
-		e->env_ipc_next = nenv->env_ipc_next;
+		e->env_ipc_value = value;
+		e->env_ipc_from = nenv->env_id;
+
+		if ((int)srcva < UTOP) {
+			if ((int)srcva % PGSIZE) return -E_INVAL;
+			if (((perm & (PTE_U|PTE_P)) != (PTE_U|PTE_P) || perm & ~(PTE_U|PTE_P|PTE_AVAIL|PTE_W)))
+				return -E_INVAL;
+
+			pte_t* pte;
+			struct PageInfo* p = page_lookup(nenv->env_pgdir, srcva, &pte);
+			if (p == NULL) return -E_INVAL;
+			if ((perm & PTE_W) && !(*pte & PTE_W)) return -E_INVAL;
+
+			if (page_insert(e->env_pgdir, p, dstva, perm) < 0) return -E_NO_MEM;
+
+			e->env_ipc_perm = perm;
+		} else e->env_ipc_perm = 0;
+
+		e->env_ipc_receiving_from = nenv->env_ipc_next;
 		nenv->env_ipc_next = 0;
 
 		nenv->env_status = ENV_RUNNABLE;
+		sched_yield();
 	} else {
 		e->env_ipc_dstva = dstva;
 		e->env_status = ENV_NOT_RUNNABLE;

@@ -11,3 +11,10 @@
 4. Because when you start running a new environment, the cpu will overwrite
    the registers. The old registers are saved in env->env_tf in trap().
 
+Challenge: I implemented blocking in sys_ipc_try_send so that ipc_send doesn't
+           have to loop until it succeeds. In sys_ipc_try_send instead if the
+           recipient is not in recieving mode, senders store their message in
+           a linked list (reusing the existing Env objects), which works because
+           an environment cannot be in both sending and receiving mode at the
+           same time.
+
