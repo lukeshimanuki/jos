@@ -33,7 +33,7 @@
 	.value name - idt_start; \
 	.value GD_KT; \
 	.byte 0; \
-	.byte 0b1##dpl##01111; \
+	.byte 0b1##dpl##01110; \
 	.value 0xf011;
 
 /* Use TRAPHANDLER_NOEC for traps where the CPU doesn't push an error code.
@@ -56,6 +56,38 @@
 	.byte 0b1##dpl##01110; \
 	.value 0xf011;
 
+#define TRAPINTHANDLER_NOEC(name, num, dpl)					\
+	.text; \
+	.globl name;							\
+	.type name, @function;						\
+	.align 2;							\
+	name:								\
+	pushl $0;							\
+	pushl $(num);							\
+	jmp _alltraps; \
+	.data; \
+	.value name - idt_start; \
+	.value GD_KT; \
+	.byte 0; \
+	.byte 0b1##dpl##01110; \
+	.value 0xf011;
+
+#define IRQHN(n)					\
+	.text; \
+	.globl IRQHN_##n;							\
+	.type IRQHN_##n, @function;						\
+	.align 2;							\
+	IRQHN_##n:								\
+	pushl $0;							\
+	pushl $(IRQ_OFFSET) + n;							\
+	jmp _alltraps; \
+	.data; \
+	.value IRQHN_##n - idt_start; \
+	.value GD_KT; \
+	.byte 0; \
+	.byte 0b10001110; \
+	.value 0xf011;
+
 .data
 .globl idt
 .align 16;
@@ -73,6 +105,7 @@ idt_start:
 #define TRAPH(name) TRAPHANDLER(name, T_##name, 00)
 #define TRAPHN(name) TRAPHANDLER_NOEC(name, T_##name, 00)
 #define TRAPHUN(name) TRAPHANDLER_NOEC(name, T_##name, 11)
+#define TRAPHI(name) TRAPINTHANDLER_NOEC(name, T_##name, 11)
 
 TRAPHN(DIVIDE)
 TRAPHN(DEBUG)
@@ -97,8 +130,26 @@ TRAPH(ALIGN)
 TRAPHN(MCHK)
 TRAPHN(SIMDERR)
 .data
-.skip 8 * (T_SYSCALL - T_SIMDERR - 1)
-TRAPHUN(SYSCALL)
+.skip 8 * (IRQ_OFFSET - T_SIMDERR - 1)
+IRQHN(0)
+IRQHN(1)
+IRQHN(2)
+IRQHN(3)
+IRQHN(4)
+IRQHN(5)
+IRQHN(6)
+IRQHN(7)
+IRQHN(8)
+IRQHN(9)
+IRQHN(10)
+IRQHN(11)
+IRQHN(12)
+IRQHN(13)
+IRQHN(14)
+IRQHN(15)
+.data
+.skip 8 * (T_SYSCALL - (IRQ_OFFSET + 15) - 1)
+TRAPHI(SYSCALL)
 .data
 .skip 8 * (256 - T_SYSCALL - 1)
 

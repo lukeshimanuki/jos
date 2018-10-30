@@ -308,11 +308,61 @@ sys_page_unmap(envid_t envid, void *va)
 //		current environment's address space.
 //	-E_NO_MEM if there's not enough memory to map srcva in envid's
 //		address space.
+
+// modified interface: block until can send
+//                     ie never return -E_IPC_NOT_RECV
 static int
 sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 {
 	// LAB 4: Your code here.
-	panic("sys_ipc_try_send not implemented");
+	//panic("sys_ipc_try_send not implemented");
+	int r;
+	struct Env* cenv = curenv;
+	struct Env* e;
+	if (envid2env(envid, &e, 0) < 0) return -E_BAD_ENV;
+
+	// add to linked-list and block
+	if (!e->env_ipc_recving) {
+		return -E_IPC_NOT_RECV;
+		cenv->env_ipc_value = value;
+		cenv->env_ipc_dstva = srcva;
+		cenv->env_ipc_perm = perm;
+		struct Env* tail = e;
+		while (tail->env_ipc_next != 0)
+			if (envid2env(e->env_ipc_next, &e, 0) < 0) panic("sys_ipc_try_send: envid2env");
+		tail->env_ipc_next = cenv->env_id;
+
+		cenv->env_status = ENV_NOT_RUNNABLE;
+		sched_yield();
+		return 0;
+	}
+
+	e->env_ipc_recving = 0;
+
+	if ((int)srcva < UTOP) {
+		if ((int)srcva % PGSIZE) return -E_INVAL;
+		if (((perm & (PTE_U|PTE_P)) != (PTE_U|PTE_P) || perm & ~(PTE_U|PTE_P|PTE_AVAIL|PTE_W)))
+			return -E_INVAL;
+
+		pte_t* pte;
+		struct PageInfo* p = page_lookup(cenv->env_pgdir, srcva, &pte);
+		if (p == NULL) return -E_INVAL;
+		if ((perm & PTE_W) && !(*pte & PTE_W)) return -E_INVAL;
+
+		if (page_insert(e->env_pgdir, p, e->env_ipc_dstva, perm) < 0) return -E_NO_MEM;
+
+		e->env_ipc_perm = perm;
+	} else e->env_ipc_perm = 0;
+
+	e->env_ipc_next = 0;
+
+	e->env_ipc_from = cenv->env_id;
+	e->env_ipc_value = value;
+
+	e->env_status = ENV_RUNNABLE;
+
+	sched_yield();
+	return 0;
 }
 
 // Block until a value is ready.  Record that you want to receive
@@ -330,8 +380,30 @@ static int
 sys_ipc_recv(void *dstva)
 {
 	// LAB 4: Your code here.
-	panic("sys_ipc_recv not implemented");
-	return 0;
+	//panic("sys_ipc_recv not implemented");
+	if ((int)dstva < UTOP && (int)dstva % PGSIZE) return -E_INVAL;
+
+	struct Env* e = curenv;
+	e->env_tf.tf_regs.reg_eax = 0;
+	if (e->env_ipc_next) {
+		struct Env* nenv;
+		if (envid2env(e->env_ipc_next, &nenv, 0) < 0) panic("sys_ipc_recv: envid2env");
+
+		e->env_ipc_value = nenv->env_ipc_value;
+		e->env_ipc_dstva = nenv->env_ipc_dstva;
+		e->env_ipc_perm = nenv->env_ipc_perm;
+
+		e->env_ipc_next = nenv->env_ipc_next;
+		nenv->env_ipc_next = 0;
+
+		nenv->env_status = ENV_RUNNABLE;
+	} else {
+		e->env_ipc_dstva = dstva;
+		e->env_status = ENV_NOT_RUNNABLE;
+		e->env_ipc_recving = 1;
+		sched_yield();
+	}
+	return 0; // to appease the compiler
 }
 
 // Dispatches to the correct kernel function, passing the arguments.
@@ -370,6 +442,10 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 		return sys_page_map(a1, (void*)a2, a3, (void*)a4, a5);
 	case SYS_page_unmap:
 		return sys_page_unmap(a1, (void*)a2);
+	case SYS_ipc_try_send:
+		return sys_ipc_try_send(a1, a2, (void*)a3, a4);
+	case SYS_ipc_recv:
+		return sys_ipc_recv((void*)a1);
 	default:
 		return -E_INVAL;
 	}
