@@ -1,0 +1,21 @@
+1. The ability to store the trap number and error code.
+2. The user program is not allowed to call page faults directly, so it runs
+   into permission issues resulting in trap 13. If we did allow it to call a
+   page fault, then for now it wouldn't do much because we haven't implemented
+   the page fault handler yet, but in the future user programs would be able to
+   request all of the computer's memory even if it wasn't using it.
+
+3. It has to be set up with descriptor privilege level -1.
+   Otherwise, the user program won't have permissions to invoke it,
+   resulting in a general protection fault.
+4. These mechanisms control what interrupts and behaviors can be invoked by
+   user programs. In particular, we don't want user programs to be able to
+   cause arbitrary crashes.
+
+Challenge: I reduced duplicate code by automatically generating the idt table
+           directly in trapentry.S. In the macro to generate the handler I
+		   also included a data section that defines a 8-byte structure
+		   constructed in the same manner as with SETGATE. One caveat is I
+		   had to put the calls to the macro in order, and I had to manually
+		   add space for interrupts I did not define.
+

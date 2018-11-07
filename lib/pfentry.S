@@ -65,18 +65,33 @@ _pgfault_upcall:
 	// ways as registers become unavailable as scratch space.
 	//
 	// LAB 4: Your code here.
+	movl 48(%esp), %eax // utf_esp
+	movl 40(%esp), %ebx // utf_eip
+	subl $4, %eax // "push" utf_eip
+	movl %ebx, (%eax)
+	movl %eax, 48(%esp) // set utf_esp
+
+	popl %eax // utf_fault_va
+	popl %eax // utf_err
 
 	// Restore the trap-time registers.  After you do this, you
 	// can no longer modify any general-purpose registers.
 	// LAB 4: Your code here.
+	popal // utf_regs
+
+	addl $4, %esp // utf_eip
 
 	// Restore eflags from the stack.  After you do this, you can
 	// no longer use arithmetic operations or anything else that
 	// modifies eflags.
 	// LAB 4: Your code here.
+	popf // utf_eflags
 
 	// Switch back to the adjusted trap-time stack.
 	// LAB 4: Your code here.
+	popl %esp // utf_esp
 
 	// Return to re-execute the instruction that faulted.
 	// LAB 4: Your code here.
+	ret
+
