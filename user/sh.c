@@ -55,7 +55,15 @@ again:
 			// then close the original 'fd'.
 
 			// LAB 5: Your code here.
-			panic("< redirection not implemented");
+			//panic("< redirection not implemented");
+			if ((fd = open(t, 0)) < 0) {
+				cprintf("open %s for read: %e", t, fd);
+				exit();
+			}
+			if (fd != 0) {
+				dup(fd, 0);
+				close(fd);
+			}
 			break;
 
 		case '>':	// Output redirection
@@ -102,6 +110,39 @@ again:
 				goto runit;
 			}
 			panic("| not implemented");
+			break;
+
+		case '&':	// background commands
+			if (debug)
+				cprintf("AMP: %d %d\n", p[0], p[1]);
+			if ((r = fork()) < 0) {
+				cprintf("fork: %e", r);
+				exit();
+			}
+			if (r == 0) {
+				close(p[0]);
+				close(p[1]);
+				goto runit;
+			} else {
+				goto again;
+			}
+			panic("& not implemented");
+			break;
+
+		case ';':	// multiple commands
+			if (debug)
+				cprintf("SEMI: %d %d\n", p[0], p[1]);
+			if ((r = fork()) < 0) {
+				cprintf("fork: %e", r);
+				exit();
+			}
+			if (r == 0) {
+				goto runit;
+			} else {
+				wait(r);
+				goto again;
+			}
+			panic("; not implemented");
 			break;
 
 		case 0:		// String is complete

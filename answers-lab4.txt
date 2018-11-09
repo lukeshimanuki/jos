@@ -1,0 +1,20 @@
+1. mpentry must run from the lower 2^16 bytes, starting at MPENTRY_PADDR.
+   However, the linker links everything after KERNBASE, so the code must
+   manually offset the addresses to refer to their corresponding addresses
+   at MPENTRY_PADDR.
+2. We only acquire the kernel lock in the trap function, after _alltraps,
+   which places the trapframe on the stack. With a shared stack, if a trap
+   occurs while another cpu is in kernel mode, _alltraps will modify the
+   stack while the other cpu is running.
+3. The envs array is mapped to the same address in all environments, so even
+   after switching to a different address space the address of e is the same.
+4. Because when you start running a new environment, the cpu will overwrite
+   the registers. The old registers are saved in env->env_tf in trap().
+
+Challenge: I implemented blocking in sys_ipc_try_send so that ipc_send doesn't
+           have to loop until it succeeds. In sys_ipc_try_send instead if the
+           recipient is not in recieving mode, senders store their message in
+           a linked list (reusing the existing Env objects), which works because
+           an environment cannot be in both sending and receiving mode at the
+           same time.
+

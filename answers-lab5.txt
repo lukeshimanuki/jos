@@ -1,0 +1,8 @@
+1. No, because eflags are saved and restored by the trapframe.
+
+Challenge: I implemented background commands (&) and multiple commands per line (;).
+  I did this by adding additional cases in the token switch statement, and using the
+  pipe case as a template made them fork and run the command and then
+  either immediately go back to the shell (&)
+  or wait for the first command to finish before moving on to the right-hand-side (;)
+

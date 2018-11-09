@@ -1,0 +1,40 @@
+1. uintptr_t
+2.
+   1023 | 0xFFC00000 | page table for top 4MB of phys memory
+   1022 | 0xFF800000 | page table for next 4MB of phys memory
+   >960 | 0xFXX00000 | page tables for phys memory
+   0960 | 0xF0000000 | page table for bottom 4MB of phys memory
+   0959 | 0xEFC00000 | page table for kernel stack
+   0956 | 0xEF000000 | page table for pages array
+   0002 | 0x00800000 | unmapped
+   0001 | 0x00400000 | unmapped
+   0000 | 0x00000000 | unmapped
+3. There are 11 bits reserved for permission flags, which dictate whether
+     a page can be read from or written to by the kernel or user.
+     There are also parts of physical memory that are not mapped to the virtual
+     address space, so user programs will not be able to access them.
+4. 1.5GB, ordinarily it would be 4GB because
+     (1024 page tables) * (1024 pages per table) * (4096 bytes / page) = 4GB,
+     but we allocate the PageInfo array with boot_alloc while we're still using
+     the bootstrap page table, which is limited to 4MB. Each PageInfo object is
+     8B, so we're limited to 512*1024 pages, leading to
+     (512*1024 pages) * (4096 bytes / page) = 2GB.
+     However, since boot_alloc starts after the kernel code and data,
+     and since the kernel is linked to after 1MB,
+     we only actually have less than 3MB to store the PageInfo array,
+     so we can only support 1.5GB.
+     (minus a bit because some of the memory is already used by the kernel)
+5. For each 4096B page, there's a PageInfo object (8B) and a PTE (4B).
+     This leads to a 12B / 4096B = 3/1024 overhead.
+6. We transition at the
+     mov    $relocated, %eax
+     jmp    *%eax
+   instructions (kern/entry.S:67).
+   It's ok to still be running at a low eip because the pgdir maps the pgtable
+   to both 0x0 and KERNBASE.
+   The transition is necessary because the kernel is linked to run at KERNBASE.
+
+Challenge: I added a kernel monitor command to print out all pages that are
+  mapped in the page directory, along with the associated addresses,
+  permissions, and reference counts.
+
