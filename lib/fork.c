@@ -26,7 +26,7 @@ pgfault(struct UTrapframe *utf)
 	//   Use the read-only page table mappings at uvpt
 	//   (see <inc/memlayout.h>).
 	if (!((err & FEC_WR) && (uvpt[PGNUM(addr)] & PTE_COW)))
-		panic("pgfault: not a write or not cow: %x %x", err, uvpt[PGNUM(addr)]);
+		panic("pgfault: not a write or not cow: %x %x %x %x", err, uvpt[PGNUM(addr)], addr, utf->utf_eip);
 
 	// LAB 4: Your code here.
 
@@ -67,26 +67,21 @@ duppage(envid_t envid, unsigned pn)
 	int r;
 
 	// LAB 4: Your code here.
-	//const size_t pdeIdx = pn >> 10;
-	//const size_t pteIdx = pn & 0x3ff;
-	//volatile pde_t* pde = &uvpd[pdeIdx];
-	//volatile pte_t* pt = uvpt;//&uvpt[*pde >> 12];
-	//volatile pte_t* pte = &pt[pteIdx];
+	pde_t pde = uvpd[pn >> 10];
+	if (!(pde & PTE_P)) return -1;
+	pte_t pte = uvpt[pn];
 
-	//uint32_t perm = *pte & (PTE_W|PTE_COW) ? PTE_P|PTE_U|PTE_COW : PTE_P|PTE_U;
+	uint32_t perm = pte & PTE_SHARE ? pte & PTE_SYSCALL : 
+		(pte & (PTE_W|PTE_COW) ? ((pte & PTE_SYSCALL) & ~PTE_W) | PTE_COW : pte & PTE_SYSCALL);
+	//cprintf("fork: %x\t%x\n", pn, perm);
 	const envid_t srcEnvid = sys_getenvid();
 	void* addr = (void*)(pn * PGSIZE);
-	uint32_t perm = PTE_P|PTE_U|PTE_COW;
-	//cprintf("duppage: %x\t\n", addr);//, uvpt[pn]);
 	if ((r = sys_page_map(srcEnvid, addr, envid, addr, perm)) < 0) {
-		//panic("duppage: sys_page_map 1: %e", r);
-		//cprintf("duppage: sys_page_map 1: %e\n", r);
+		panic("duppage: sys_page_map 1: %e", r);
 		return r;
 	}
 	if ((r = sys_page_map(envid, addr, srcEnvid, addr, perm)) < 0)
 		panic("duppage: sys_page_map 2: %e", r);
-	//cprintf("duppage: %x\t\n", addr);//, uvpt[pn]);
-	//panic("duppage not implemented");
 	return 0;
 }
 
@@ -123,20 +118,14 @@ fork(void)
 		thisenv = &envs[ENVX(sys_getenvid())];
 		return 0;
 	}
-	for (uint8_t* addr = (uint8_t*) UTEXT; addr < (uint8_t*)UTEXT + PTSIZE; addr += PGSIZE) {
-		const uint32_t pn = PGNUM(addr);
-		//cprintf("fork: %x\t%x\t%x\n", addr, pn, (uint8_t*)ULIM);
-		//if ((uvpt[pn] & PTE_P) )//&& (uvpt[pn] & PTE_U) && (uvpt[pn] & (PTE_W | PTE_COW)))
-			duppage(e, pn);
-	}
-	for (uint8_t* addr = (uint8_t*) USTACKTOP - PTSIZE; addr < (uint8_t*)UTOP - PGSIZE; addr += PGSIZE) {
-		const uint32_t pn = PGNUM(addr);
-		//cprintf("fork: %x\t%x\t%x\n", addr, pn, (uint8_t*)ULIM);
-		//if ((uvpt[pn] & PTE_P) )//&& (uvpt[pn] & PTE_U) && (uvpt[pn] & (PTE_W | PTE_COW)))
-			duppage(e, pn);
-	}
+	for (uint32_t pdi = 0; pdi < PDX(UTOP); ++pdi)
+		if (uvpd[pdi] & PTE_P)
+			for (uint32_t pn = pdi * 1024; pn < (pdi + 1) * 1024; ++pn)
+				if ((uvpt[pn] & PTE_P) && (uvpt[pn] & PTE_U) && pn < PGNUM(USTACKTOP))
+					duppage(e, pn);
+
 	// Also copy the stack we are currently running on.
-	void* addr = (void*)UXSTACKTOP - PGSIZE; // ROUNDDOWN(&e, PGSIZE);
+	void* addr = (void*)UXSTACKTOP - PGSIZE;
 	if ((r = sys_page_alloc(e, addr, PTE_P|PTE_U|PTE_W)) < 0)
 		panic("fork: sys_page_alloc: %e", r);
 	if ((r = sys_page_map(e, addr, envid, UTEMP, PTE_P|PTE_U|PTE_W)) < 0)

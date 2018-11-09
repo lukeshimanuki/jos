@@ -26,6 +26,7 @@ static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
 	{ "backtrace", "Display function backtrace", mon_backtrace },
+	{ "pgdump", "Display page mappings", mon_pgdump },
 };
 
 /***** Implementations of basic kernel monitor commands *****/
@@ -79,6 +80,20 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 
 		ebp = *(uint32_t*)ebp;
 	}
+	return 0;
+}
+
+#include "pmap.h"
+int
+mon_pgdump(int argc, char **argv, struct Trapframe *tf)
+{
+	for (void* addr = 0; addr < (void*)0xfffff000; addr += PGSIZE) {
+		pte_t* pte;
+		struct PageInfo* page = page_lookup(kern_pgdir, addr, &pte);
+		if (page && page->pp_ref > 0) cprintf("addr=%x,refs=%d,pte=%x\n", addr, page->pp_ref, *pte);
+		//else cprintf("addr=%x,none\n", addr);
+	}
+
 	return 0;
 }
 

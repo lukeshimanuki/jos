@@ -34,3 +34,7 @@
    to both 0x0 and KERNBASE.
    The transition is necessary because the kernel is linked to run at KERNBASE.
 
+Challenge: I added a kernel monitor command to print out all pages that are
+  mapped in the page directory, along with the associated addresses,
+  permissions, and reference counts.
+
