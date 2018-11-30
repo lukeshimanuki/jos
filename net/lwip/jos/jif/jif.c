@@ -139,7 +139,8 @@ low_level_input(void *va)
 	int bytes = q->len;
 	if (bytes > (len - copied))
 	    bytes = len - copied;
-	memcpy(q->payload, rxbuf + copied, bytes);
+	if (bytes > 0)
+		memcpy(q->payload, rxbuf + copied, bytes);
 	copied += bytes;
     }
 

@@ -122,3 +122,12 @@ sys_time_msec(void)
 {
 	return (unsigned int) syscall(SYS_time_msec, 0, 0, 0, 0, 0, 0);
 }
+
+int sys_transmit(void* data, size_t len) {
+	return syscall(SYS_transmit, 0, (uintptr_t)data, len, 0, 0, 0);
+}
+
+int sys_receive(void* data, size_t len) {
+	return syscall(SYS_receive, 0, (uintptr_t)data, len, 0, 0, 0);
+}
+

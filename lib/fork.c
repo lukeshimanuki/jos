@@ -20,6 +20,13 @@ pgfault(struct UTrapframe *utf)
 
 	//cprintf("pgfault: %x\t%x\n", addr, utf->utf_eip);
 
+	// if not present, allocate
+	if (!(uvpt[PGNUM(addr)] & PTE_P)) {
+		if ((r = sys_page_alloc(0, ROUNDDOWN(addr, PGSIZE), PTE_P|PTE_U|PTE_W)) < 0)
+			panic("pgfault: failed to allocate page");
+		return;
+	}
+
 	// Check that the faulting access was (1) a write, and (2) to a
 	// copy-on-write page.  If not, panic.
 	// Hint:

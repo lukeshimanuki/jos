@@ -228,8 +228,11 @@ trap_dispatch(struct Trapframe *tf)
 	// interrupt using lapic_eoi() before calling the scheduler!
 	// LAB 4: Your code here.
 	if (tf->tf_trapno == IRQ_OFFSET + IRQ_TIMER) {
+		time_tick();
 		lapic_eoi();
-		sched_yield();
+		static uint32_t timer_count = 0;
+		timer_count = (timer_count + 1) % 200;
+		if (timer_count == 0) sched_yield();
 		return;
 	}
 
@@ -333,7 +336,15 @@ page_fault_handler(struct Trapframe *tf)
 
 	// LAB 3: Your code here.
 
-	if (!(tf->tf_cs & 3)) panic("kernel page fault");
+	if (!(tf->tf_cs & 3)) {
+		//panic("kernel page fault");
+		cprintf("page_fault_handler: allocating kernel page\n");
+		struct PageInfo* page = page_alloc(0);
+		if (!page) panic("page_fault_handler: can't allocate\n");
+		if (page_insert(curenv->env_pgdir, page, (void*)fault_va, PTE_P|PTE_W|PTE_U) < 0)
+			panic("page_fault_handler: can't insert\n");
+		env_run(curenv);
+	}
 
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
@@ -383,10 +394,17 @@ page_fault_handler(struct Trapframe *tf)
 		cprintf("[%08x] user fault va %08x ip %08x bad stack\n",
 			curenv->env_id, fault_va, tf->tf_eip);
 		print_trapframe(tf);
-		user_mem_assert(curenv, (void*)UXSTACKTOP - PGSIZE + 0xf00, 0x100, PTE_U|PTE_P|PTE_W);
-		// Destroy the environment that caused the fault.
-		env_destroy(curenv);
-		return;
+		//user_mem_assert(curenv, (void*)UXSTACKTOP - PGSIZE + 0xf00, 0x100, PTE_U|PTE_P|PTE_W);
+		//// Destroy the environment that caused the fault.
+		//env_destroy(curenv);
+		//return;
+		//cprintf("page_fault_handler: allocating kernel page\n");
+		//struct PageInfo* page = page_alloc(0);
+		//if (!page) panic("page_fault_handler: can't allocate\n");
+		//if (page_insert(curenv->env_pgdir, page, (void*)fault_va, PTE_P|PTE_W|PTE_U) < 0)
+		//	panic("page_fault_handler: can't insert\n");
+		panic("hi");
+		env_run(curenv);
 	}
 
 	user_mem_assert(curenv, (void*)curenv->env_pgfault_upcall, 1, PTE_U|PTE_P);

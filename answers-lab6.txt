@@ -1,0 +1,7 @@
+1. When the transmit ring is full, my implementation returns an error value,
+   indicating to the network server that it has to resend the packet.
+2. As with transmit, the base system call is nonblocking (returns error value
+   if empty), and the network server blocks until a packet is ready.
+3. This file came from JOS. Cheesy web page!
+4. 5 hours for part A. 12 hours for part B.  hours for challenge.
+
