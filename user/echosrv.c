@@ -4,7 +4,7 @@
 
 #define PORT 7
 
-#define BUFFSIZE 32
+#define BUFFSIZE 64
 #define MAXPENDING 5    // Max connection requests
 
 static void

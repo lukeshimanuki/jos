@@ -145,7 +145,6 @@ int e1000_receive(void* data, size_t len) {
 		return numbytes;
 	} else {
 		//cprintf("empty: %x %d\n", data, len);
-		// full
 		return -1;
 	}
 }
