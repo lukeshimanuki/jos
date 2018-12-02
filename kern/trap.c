@@ -398,12 +398,12 @@ page_fault_handler(struct Trapframe *tf)
 		//// Destroy the environment that caused the fault.
 		//env_destroy(curenv);
 		//return;
-		//cprintf("page_fault_handler: allocating kernel page\n");
-		//struct PageInfo* page = page_alloc(0);
-		//if (!page) panic("page_fault_handler: can't allocate\n");
-		//if (page_insert(curenv->env_pgdir, page, (void*)fault_va, PTE_P|PTE_W|PTE_U) < 0)
-		//	panic("page_fault_handler: can't insert\n");
-		panic("hi");
+		cprintf("page_fault_handler: allocating kernel page\n");
+		struct PageInfo* page = page_alloc(0);
+		if (!page) panic("page_fault_handler: can't allocate\n");
+		if (page_insert(curenv->env_pgdir, page, (void*)fault_va, PTE_P|PTE_W|PTE_U) < 0)
+			panic("page_fault_handler: can't insert\n");
+		//panic("hi");
 		env_run(curenv);
 	}
 
