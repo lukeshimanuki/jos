@@ -1,5 +1,6 @@
 #include <kern/e1000.h>
 #include <kern/pmap.h>
+#include <kern/env.h>
 
 volatile uint32_t* e1000;
 
@@ -9,10 +10,8 @@ volatile uint32_t* e1000;
 #define RX_PKTSIZE 2048
 static struct e1000_tx_desc* tx_desc;
 static struct e1000_rx_desc* rx_desc;
-static void* tx_pkt_buffer;
-static physaddr_t tx_pkt_buffer_pa;
-static void* rx_pkt_buffer;
-static physaddr_t rx_pkt_buffer_pa;
+static struct PageInfo* tx_pkt_buffer_pg[NUM_TX_DESCS];
+static struct PageInfo* rx_pkt_buffer_pg[NUM_RX_DESCS];
 
 // LAB 6: Your driver code here
 int e1000_attach(struct pci_func *pcif) {
@@ -29,15 +28,10 @@ int e1000_attach(struct pci_func *pcif) {
 
 	struct PageInfo* tx_buffer_page;
 	size_t tx_buffer_size = NUM_TX_DESCS * TX_PKTSIZE;
-	for (int i = 0; i * PGSIZE < tx_buffer_size; ++i) {
-		tx_buffer_page = page_alloc(0);
-		cprintf("e1000 using page %d as tx buffer\n", page2pa(tx_buffer_page) >> 12);
-	}
-	tx_pkt_buffer_pa = page2pa(tx_buffer_page);
-	tx_pkt_buffer = mmio_map_region(tx_pkt_buffer_pa, tx_buffer_size);
-
-	for (size_t i = 0; i < NUM_TX_DESCS; ++i)
+	for (size_t i = 0; i < NUM_TX_DESCS; ++i) {
+		tx_pkt_buffer_pg[i] = page_alloc(0);
 		tx_desc[i].upper.fields.status |= E1000_TXD_STAT_DD;
+	}
 
 	e1000[E1000_TDLEN >> 2] = tx_desc_size;
 	e1000[E1000_TDBAL >> 2] = page2pa(tx_desc_pg);
@@ -62,16 +56,12 @@ int e1000_attach(struct pci_func *pcif) {
 
 	struct PageInfo* rx_buffer_page;
 	size_t rx_buffer_size = NUM_RX_DESCS * RX_PKTSIZE;
-	for (int i = 0; i * PGSIZE < rx_buffer_size; ++i) {
-		rx_buffer_page = page_alloc(0);
-		cprintf("e1000 using page %d as rx buffer\n", page2pa(rx_buffer_page) >> 12);
-	}
-	rx_pkt_buffer_pa = page2pa(rx_buffer_page);
-	rx_pkt_buffer = mmio_map_region(rx_pkt_buffer_pa, rx_buffer_size);
 
 	for (size_t i = 0; i < NUM_RX_DESCS; ++i) {
 		rx_desc[i].status = 0;
-		rx_desc[i].buffer_addr = rx_pkt_buffer_pa + i * RX_PKTSIZE;
+		struct PageInfo* page = page_alloc(0);
+		rx_pkt_buffer_pg[i] = page;
+		rx_desc[i].buffer_addr = page2pa(page) + sizeof(int);
 		rx_desc[i].length = RX_PKTSIZE;
 	}
 
@@ -102,9 +92,14 @@ int e1000_transmit(void* data, size_t len) {
 	struct e1000_tx_desc* desc = &tx_desc[tdt];
 	if (desc->upper.fields.status & E1000_TXD_STAT_DD) {
 		cprintf("transmitting: %d\n", tdt);
-		for (size_t i = 0; i < len; ++i)
-			((char*)(tx_pkt_buffer))[tdt * TX_PKTSIZE + i] = ((char*)(data))[i];
-		desc->buffer_addr = tx_pkt_buffer_pa + tdt * TX_PKTSIZE;
+
+		struct PageInfo* page = page_lookup(curenv->env_pgdir, data, NULL);
+		++page->pp_ref; // so it doesn't get freed
+		page_insert(curenv->env_pgdir, tx_pkt_buffer_pg[tdt], data, PTE_P|PTE_W|PTE_U);
+		--page->pp_ref;
+		tx_pkt_buffer_pg[tdt] = page;
+
+		desc->buffer_addr = page2pa(page) + sizeof(int);
 		desc->lower.data = 0;
 		desc->lower.flags.length = len;
 		desc->lower.data |= E1000_TXD_CMD_RS | E1000_TXD_CMD_EOP;
@@ -135,12 +130,14 @@ int e1000_receive(void* data, size_t len) {
 		size_t numbytes = desc->length;
 		if (len < numbytes) numbytes = len;
 		if (RX_PKTSIZE < numbytes) numbytes = RX_PKTSIZE;
-		numbytes -= 4;
-		//if (numbytes == 64) numbytes = 52; // terrible hack
-		//if (numbytes == 68) numbytes = 64;
+		if (numbytes == 64 || numbytes == 68) numbytes -= 4;
 
-		for (size_t i = 0; i < numbytes; ++i)
-			((char*)(data))[i] = ((char*)(rx_pkt_buffer))[idx * RX_PKTSIZE + i];
+		struct PageInfo* page = page_lookup(curenv->env_pgdir, data, NULL);
+		++page->pp_ref; // so it doesn't get freed
+		page_insert(curenv->env_pgdir, rx_pkt_buffer_pg[idx], data, PTE_P|PTE_W|PTE_U);
+		--page->pp_ref;
+		rx_pkt_buffer_pg[idx] = page;
+		desc->buffer_addr = page2pa(page) + sizeof(int);
 
 		desc->status = 0;
 		e1000[E1000_RDT >> 2] = (rdt + 1) % NUM_RX_DESCS;
