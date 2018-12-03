@@ -8,8 +8,8 @@ volatile uint32_t* e1000;
 #define NUM_RX_DESCS 128
 #define TX_PKTSIZE 1518
 #define RX_PKTSIZE 2048
-static struct e1000_tx_desc* tx_desc;
-static struct e1000_rx_desc* rx_desc;
+static volatile struct e1000_tx_desc* tx_desc;
+static volatile struct e1000_rx_desc* rx_desc;
 static struct PageInfo* tx_pkt_buffer_pg[NUM_TX_DESCS];
 static struct PageInfo* rx_pkt_buffer_pg[NUM_RX_DESCS];
 
@@ -89,7 +89,7 @@ int e1000_attach(struct pci_func *pcif) {
 int e1000_transmit(void* data, size_t len) {
 	cprintf("transmit: %x %d\n", data, len);
 	uint32_t tdt = e1000[E1000_TDT >> 2];
-	struct e1000_tx_desc* desc = &tx_desc[tdt];
+	volatile struct e1000_tx_desc* desc = &tx_desc[tdt];
 	if (desc->upper.fields.status & E1000_TXD_STAT_DD) {
 		cprintf("transmitting: %d\n", tdt);
 
@@ -124,7 +124,7 @@ int e1000_receive(void* data, size_t len) {
 	uint32_t rdt = e1000[E1000_RDT >> 2] % NUM_RX_DESCS;
 	uint32_t idx = rdt + 1;
 	//cprintf("%d\n", rdt);
-	struct e1000_rx_desc* desc = &rx_desc[idx];
+	volatile struct e1000_rx_desc* desc = &rx_desc[idx];
 	if (desc->status & E1000_RXD_STAT_DD) {
 		cprintf("receiving: %d\n", idx);
 		size_t numbytes = desc->length;
