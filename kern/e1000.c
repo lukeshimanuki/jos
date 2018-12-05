@@ -4,7 +4,7 @@
 
 volatile uint32_t* e1000;
 
-#define NUM_TX_DESCS 16
+#define NUM_TX_DESCS 128
 #define NUM_RX_DESCS 128
 #define TX_PKTSIZE 1518
 #define RX_PKTSIZE 2048

@@ -444,7 +444,7 @@ sys_ipc_recv(void *dstva)
 		nenv->env_ipc_next = 0;
 
 		nenv->env_status = ENV_RUNNABLE;
-		sched_yield();
+		//sched_yield();
 	} else {
 		e->env_ipc_dstva = dstva;
 		e->env_status = ENV_NOT_RUNNABLE;
